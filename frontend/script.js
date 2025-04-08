@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const API_BASE_URL = 'YOUR_RENDER_BACKEND_URL_HERE/api'; // IMPORTANT: PASTE YOUR RENDER URL
+    const API_BASE_URL = 'https://solana-monitor.onrender.com'; // IMPORTANT: PASTE YOUR RENDER URL
     const SOLSCAN_BASE = "https://solscan.io";
     const REFRESH_INTERVAL_NOTIFICATIONS = 90 * 1000;
     const REFRESH_INTERVAL_COMMON_TOKENS = 5 * 60 * 1000;
