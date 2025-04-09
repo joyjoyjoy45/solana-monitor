@@ -3,142 +3,44 @@ const cron = require('node-cron');
 const MonitoredTransfer = require('../models/MonitoredTransfer');
 const CommonTokenActivity = require('../models/CommonTokenActivity');
 const { getTransactionsForWallet, fetchTokenMetadataBulk } = require('./solanaService');
-// REMOVED: Direct import of monitorService status getter
 
 // Constants remain the same
 const MIN_COMMON_TRADING_WALLETS = 2;
 const TX_FETCH_LIMIT_PER_RECIPIENT = 100;
 const RECIPIENT_BATCH_SIZE = 10;
 
-// Helper function remains the same
-const extractTradedMintsFromTransactions = (transactions, recipientAddress) => {
-    const mints = new Set();
-    if (!transactions) return mints;
-    for (const tx of transactions) {
-        if (tx.error || tx.meta?.err) continue;
-        if (tx.tokenTransfers?.length > 0) {
-            tx.tokenTransfers.forEach(tf => {
-                if (tf.mint && (tf.fromUserAccount === recipientAddress || tf.toUserAccount === recipientAddress)) {
-                    if (tf.mint.length > 30 && tf.mint !== 'So11111111111111111111111111111111111111112') { mints.add(tf.mint); }
-                }
-            });
-        }
-    }
-    return mints;
-};
+// Helper remains the same
+const extractTradedMintsFromTransactions = (transactions, recipientAddress) => { /* ... no changes needed ... */ const m=new Set();if(!transactions)return m;for(const tx of transactions){if(tx.error||tx.meta?.err)continue;if(tx.tokenTransfers?.length>0){tx.tokenTransfers.forEach(tf=>{if(tf.mint&&(tf.fromUserAccount===recipientAddress||tf.toUserAccount===recipientAddress)){if(tf.mint.length>30&&tf.mint!=='So11111111111111111111111111111111111111112'){m.add(tf.mint);}}});}}return m; };
 
 // --- Background Job 3: Find Common Traded Tokens by Recipients ---
 const startCommonTokenJob = () => {
-    // Schedule the job to run
-    cron.schedule('*/15 * * * *', async () => { // Run every 15 minutes
+    // **** CHANGE CRON TIME ****
+    // From '*/15 * * * *' (every 15 mins) to '*/5 * * * *' (every 5 minutes)
+    cron.schedule('*/5 * * * *', async () => {
+    // *************************
 
-        // **** CHANGE HERE: Check global status dynamically inside the callback ****
         let isEnabled = false;
-        try {
-            // Dynamically require monitorService ONLY to get the status
-            isEnabled = require('./monitorService').getGlobalMonitoringStatus();
-        } catch (err) {
-            // Handle case where monitorService might not be fully initialized yet (less likely but safe)
-            console.error("Error retrieving global monitoring status in commonTokenJob:", err);
-            return; // Skip execution if status cannot be determined
-        }
+        try { isEnabled = require('./monitorService').getGlobalMonitoringStatus(); } // Dynamic check
+        catch (err) { console.error("Err getting status in commonTokenJob:", err); return; }
+        if (!isEnabled) return;
 
-        if (!isEnabled) {
-            // console.log('Cron (Common Tokens): Skipped - Global monitoring disabled.');
-            return; // Exit the cron callback if monitoring is off
-        }
-        // **** END CHANGE ****
-
-        console.log('Cron: Running Common Token Scan Job...');
+        console.log('Cron: Running Common Token Scan Job...'); // Runs every 5 mins
         const startTime = Date.now();
-        const timeframes = [60, 90, 120]; // Analyze for all supported windows
+        // Include 360 min timeframe
+        const timeframes = [60, 90, 120, 360];
 
         try {
             for (const timeframeMinutes of timeframes) {
-                // processCommonTokensForTimeframe checks recipients and their activity
                 await processCommonTokensForTimeframe(timeframeMinutes);
             }
-        } catch (error) {
-            console.error(`Cron (Common Tokens): Unhandled error during job execution:`, error);
-        } finally {
-            console.log(`Cron: Common Token Scan Job finished in ${(Date.now() - startTime) / 1000}s.`);
-        }
+        } catch (error) { console.error(`Cron (Common Tokens): Unhandled job error:`, error); }
+        finally { console.log(`Cron: Common Token Scan Job finished in ${(Date.now() - startTime) / 1000}s.`); }
     }); // End cron.schedule callback
 }; // End startCommonTokenJob
 
 
-// Processes common token logic for a single timeframe (e.g., 60 mins)
-// This function does NOT need the global status check, as it's only called if the job runs.
-async function processCommonTokensForTimeframe(timeframeMinutes) {
-    console.log(`Common Token (${timeframeMinutes} min): Starting processing.`);
-    const processStart = Date.now();
-    const nowTimestamp = Math.floor(Date.now() / 1000);
-    const timeframeSeconds = timeframeMinutes * 60;
-    const sinceTimestamp = nowTimestamp - timeframeSeconds;
+// processCommonTokensForTimeframe remains the same internally
+async function processCommonTokensForTimeframe(timeframeMinutes) { /* ... No changes needed ... */ console.log(`CT (${timeframeMinutes}m): Starting.`); const pS=Date.now(); const nowTs=Math.floor(Date.now()/1000); const tfS=timeframeMinutes*60; const sinceTs=nowTs-tfS; let apiEC=0; try{const relRecs=await MonitoredTransfer.distinct('recipientWallet',{monitorUntilTimestamp:{$gt:sinceTs}}); if(!relRecs||relRecs.length===0){console.log(`CT (${timeframeMinutes}m): No relevant recipients.`);await CommonTokenActivity.deleteMany({timeframeMinutes});return;} console.log(`CT (${timeframeMinutes}m): Found ${relRecs.length} recipients.`); const tkTrMap=new Map(); let ckRecC=0; for(let i=0;i<relRecs.length;i+=RECIPIENT_BATCH_SIZE){const b=relRecs.slice(i,i+RECIPIENT_BATCH_SIZE); const p=b.map(async(r)=>{try{const txs=await getTransactionsForWallet(r,{limit:TX_FETCH_LIMIT_PER_RECIPIENT,sinceTimestamp:sinceTs});return{r,tM:extractTradedMintsFromTransactions(txs,r)};}catch(e){apiEC++;console.error(`Err fetch tx ${r}:`,e.message);return{r,tM:new Set(),e:true};}}); const res=await Promise.all(p); ckRecC+=res.length; res.forEach(r=>{if(!r.error&&r.tM.size>0){r.tM.forEach(m=>{if(!tkTrMap.has(m))tkTrMap.set(m,new Set());tkTrMap.get(m).add(r.r);});}}); } const comTkns=Array.from(tkTrMap.entries()).filter(([_,t])=>t.size>=MIN_COMMON_TRADING_WALLETS).map(([m,tS])=>({mA:m,tr:Array.from(tS)})); console.log(`CT (${timeframeMinutes}m): Found ${comTkns.length} common tokens.`); let mdMap={};const cMints=comTkns.map(t=>t.mA); if(cMints.length>0){mdMap=await fetchTokenMetadataBulk(cMints);} if(comTkns.length>0){const ops=comTkns.map(tk=>{const meta=mdMap[tk.mA]||{};return{updateOne:{filter:{mintAddress:tk.mA,timeframeMinutes:timeframeMinutes},update:{$set:{name:meta.name||'?',symbol:meta.symbol||'?',tradingWalletsCount:tk.tr.length,tradingWallets:tk.tr,lastDetectionTimestamp:new Date()}},upsert:true}}}); try{await CommonTokenActivity.bulkWrite(ops,{ordered:false});}catch(e){console.error(`CT (${timeframeMinutes}m) DB Err:`, e);}} await CommonTokenActivity.deleteMany({timeframeMinutes:timeframeMinutes,mintAddress:{$nin:cMints}}); }catch(err){console.error(`CT (${timeframeMinutes}m) Processing Error:`, err);} finally {console.log(`CT (${timeframeMinutes}m) Finished in ${(Date.now()-pS)/1000}s. API Errors:${apiEC}.`);} }
 
-    let apiErrorCount = 0; // Track errors during this specific timeframe process
 
-    try {
-        // 1. Find unique relevant recipients
-        const relevantRecipients = await MonitoredTransfer.distinct('recipientWallet', {
-            monitorUntilTimestamp: { $gt: sinceTimestamp }
-        });
-
-        if (!relevantRecipients || relevantRecipients.length === 0) {
-            console.log(`Common Token (${timeframeMinutes} min): No relevant recipients found.`);
-            await CommonTokenActivity.deleteMany({ timeframeMinutes }); // Cleanup old data
-            return;
-        }
-        console.log(`Common Token (${timeframeMinutes} min): Found ${relevantRecipients.length} unique recipients.`);
-
-        // 2. Process recipients in batches
-        const tokenTradersMap = new Map();
-        let checkedRecipientCount = 0;
-
-        for (let i = 0; i < relevantRecipients.length; i += RECIPIENT_BATCH_SIZE) {
-            const batch = relevantRecipients.slice(i, i + RECIPIENT_BATCH_SIZE);
-            const promises = batch.map(async (recipient) => {
-                 try {
-                    const recipientTxs = await getTransactionsForWallet(recipient, { limit: TX_FETCH_LIMIT_PER_RECIPIENT, sinceTimestamp: sinceTimestamp });
-                    return { recipient, tradedMints: extractTradedMintsFromTransactions(recipientTxs, recipient) };
-                 } catch (error) {
-                     apiErrorCount++; console.error(`Err fetching tx for ${recipient}:`, error.message);
-                     return { recipient, tradedMints: new Set(), error: true };
-                 }
-            });
-            const results = await Promise.all(promises);
-            checkedRecipientCount += results.length;
-            results.forEach(r => { if (!r.error && r.tradedMints.size > 0) { r.tradedMints.forEach(m => { if (!tokenTradersMap.has(m)) tokenTradersMap.set(m, new Set()); tokenTradersMap.get(m).add(r.recipient); }); } });
-        } // End batch loop
-
-        // 3. Filter common tokens
-        const commonTokens = Array.from(tokenTradersMap.entries())
-            .filter(([_,traders]) => traders.size >= MIN_COMMON_TRADING_WALLETS)
-            .map(([m, tS]) => ({ mintAddress: m, traders: Array.from(tS) }));
-        console.log(`Common Token (${timeframeMinutes} min): Found ${commonTokens.length} common tokens.`);
-
-        // 4. Fetch metadata
-        let metadataMap = {}; const commonMints = commonTokens.map(t => t.mintAddress);
-        if (commonMints.length > 0) { metadataMap = await fetchTokenMetadataBulk(commonMints); }
-
-        // 5. Update DB
-        if (commonTokens.length > 0) {
-            const bulkOps = commonTokens.map(token => { const meta = metadataMap[token.mintAddress] || {}; return { updateOne: { filter: { mintAddress: token.mintAddress, timeframeMinutes: timeframeMinutes }, update: { $set: { name: meta.name || 'Unknown', symbol: meta.symbol || '?', tradingWalletsCount: token.traders.length, tradingWallets: token.traders, lastDetectionTimestamp: new Date() } }, upsert: true } }; });
-            try { await CommonTokenActivity.bulkWrite(bulkOps, { ordered: false }); } catch (e) { console.error(`Common Token (${timeframeMinutes} min) DB BulkWrite Err:`, e); }
-        }
-
-        // 6. Cleanup stale entries
-        await CommonTokenActivity.deleteMany({ timeframeMinutes: timeframeMinutes, mintAddress: { $nin: commonMints } });
-
-    } catch(error) {
-        // Catch errors specific to this timeframe's processing
-        console.error(`Common Token (${timeframeMinutes} min): Error during processing:`, error);
-        // Potentially increment a higher-level error counter if needed
-    } finally {
-        // Log completion for this specific timeframe
-         console.log(`Common Token (${timeframeMinutes} min): Processing finished in ${(Date.now() - processStart)/1000}s. API Errors in timeframe: ${apiErrorCount}.`);
-    }
-} // End processCommonTokensForTimeframe
-
-// Export only the function needed to start the job scheduler
 module.exports = { startCommonTokenJob };

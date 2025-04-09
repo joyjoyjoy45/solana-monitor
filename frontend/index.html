@@ -16,13 +16,16 @@
                  <select id="monitor-window" aria-label="Set time window to check recipients after transfer">
                      <option value="60">60 Min</option>
                      <option value="90">90 Min</option>
-                     <option value="120">120 Min</option>
+                     <option value="120">120 Min (2 Hr)</option>
+                     <!-- **** ADD 360 OPTION **** -->
+                     <option value="360">360 Min (6 Hr)</option>
+                     <!-- *********************** -->
                  </select>
                  <button id="update-settings-btn" class="small-btn">Set</button>
             </div>
-             <div class="control-group">
-                 <label for="global-monitor-switch">Bot Active:</label>
-                 <label class="switch" aria-label="Toggle global background monitoring On or Off">
+            <div class="control-group">
+                <label for="global-monitor-switch">Bot Active:</label>
+                <label class="switch" aria-label="Toggle global background monitoring On or Off">
                     <input type="checkbox" id="global-monitor-switch">
                     <span class="slider round"></span>
                  </label>
@@ -35,6 +38,7 @@
          </div>
     </header>
 
+    <!-- rest of index.html remains the same... -->
     <main class="container">
         <!-- Column 1: Wallet Management -->
          <div class="column">
@@ -47,14 +51,10 @@
                  </form>
                 <p id="add-error-message" class="error-message" role="alert"></p>
              </section>
-
             <section class="section monitored-wallets-section card" aria-labelledby="monitored-heading">
                  <h2 id="monitored-heading">Monitored Wallets</h2>
-                <ul id="wallets-list" aria-live="polite">
-                    <li class="loading-text">Loading wallets...</li>
-                 </ul>
+                <ul id="wallets-list" aria-live="polite"> <li class="loading-text">Loading wallets...</li> </ul>
              </section>
-
              <section class="section wallet-details-section card hidden" id="wallet-details" aria-live="polite" aria-labelledby="details-heading">
                  <h2 id="details-heading">Details: <span id="details-wallet-address" title="Full Address"></span></h2>
                  <button id="close-details-btn" class="small-btn close-btn" aria-label="Close Wallet Details Section">Close</button>
@@ -64,7 +64,6 @@
                  <div id="transactions-error" class="error-message" role="alert"></div>
             </section>
          </div>
-
          <!-- Column 2: Activity Feeds -->
         <div class="column">
             <section class="section notifications-section card" aria-labelledby="notifications-heading">
@@ -74,7 +73,6 @@
                  <ul id="notifications-list" class="activity-list"></ul>
                  <div id="notifications-error" class="error-message" role="alert"></div>
             </section>
-
             <section class="section common-tokens-section card" aria-labelledby="common-tokens-heading">
                 <h2 id="common-tokens-heading"><img src="trending.svg" alt="" class="icon" aria-hidden="true"> Common Tokens</h2>
                 <div class="info-text"> Tokens recently traded by multiple recipients. Window: <span id="common-token-timeframe">?</span> mins. </div>
@@ -85,11 +83,9 @@
             </section>
         </div>
      </main>
-
     <footer>
         <p>Solana Monitor | Use responsibly & monitor API costs/limits.</p>
     </footer>
-
     <script src="script.js"></script>
 </body>
 </html>
