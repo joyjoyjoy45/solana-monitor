@@ -2,7 +2,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Configuration ---
     // !!! IMPORTANT: Replace placeholder with YOUR Render Backend URL !!!
-    const API_BASE_URL = 'YOUR_RENDER_BACKEND_URL_HERE/api'; // <<<<<<<<< CHANGE THIS IF YOU HAVENT
+    const API_BASE_URL = 'https://solana-monitor.onrender.com/api'; // <<<<<<<<< CHANGE THIS IF YOU HAVENT
     // Example: const API_BASE_URL = 'https://solana-monitor-backend-xyz.onrender.com/api';
 
     // Constants
